@@ -1,20 +1,22 @@
-import { useState, useEffect, useCallback, useMemo } from 'react';
-import axios from 'axios';
+// File: src/pages/polls/PollList.tsx
 
-import { showConfirmation, showToast } from '../../helpers/swalHelpers';
+import { useState, useMemo, useRef } from 'react';
+import axios from 'axios';
+import { showConfirmation } from '../../helpers/swalHelpers';
 import { type Poll, type TabType, formatForDateTimeInput } from '../../features/poll/poll';
+import { usePolls, usePollMutations } from '../../features/poll/hooks/usePollQueries';
+
 import PollTabs from '../../features/poll/PollTabs';
 import PollTable from '../../features/poll/PollTable';
 import Pagination from '../../components/navigation/Pagination';
 
 export default function PollList() {
+    const titleInputRef = useRef<HTMLInputElement>(null);
+
+    // --- UI State ---
     const [isPanelOpen, setIsPanelOpen] = useState(true);
     const [activeTab, setActiveTab] = useState<TabType>('form');
     const [selectedIds, setSelectedIds] = useState<string[]>([]);
-
-    // --- Data State ---
-    const [polls, setPolls] = useState<Poll[]>([]);
-    const [isLoading, setIsLoading] = useState(false);
 
     // --- Pagination State ---
     const [currentPage, setCurrentPage] = useState(1);
@@ -33,46 +35,34 @@ export default function PollList() {
     const [statusFilter, setStatusFilter] = useState('all');
     const [sortFilter, setSortFilter] = useState('newest');
 
-    // --- Axios Configuration ---
-    // FIX 1: Wrap api in useMemo so it doesn't trigger infinite loops in useCallback
-    const api = useMemo(() => {
-        return axios.create({
-            baseURL: 'http://localhost:8000/api',
-            headers: {
-                'Content-Type': 'application/json',
-                'Accept': 'application/json',
-                'Authorization': `Bearer ${localStorage.getItem('token') || ''}`
-            }
-        });
-    }, []);
+    // --- TanStack Query ---
+    const { data: polls = [], isLoading } = usePolls();
+    const {
+        createMutation,
+        updateMutation,
+        deleteMutation,
+        bulkStatusMutation,
+        bulkDeleteMutation
+    } = usePollMutations();
 
-    // --- Handlers ---
-    const fetchPolls = useCallback(async () => {
-        try {
-            setIsLoading(true);
-            const { data } = await api.get('/polls');
-
-            // FIX 2: Protect against paginated objects from the backend
-            const pollsArray = Array.isArray(data) ? data : (data?.data || []);
-            setPolls(pollsArray);
-        } catch (error) {
-            console.error("Failed to fetch polls:", error);
-        } finally {
-            setIsLoading(false);
-        }
-    }, [api]); // ESLint is now happy because api is stable and included
-
-    useEffect(() => {
-        // eslint-disable-next-line react-hooks/set-state-in-effect
-        void fetchPolls();
-    }, [fetchPolls]);
-
-    // Reset to page 1 whenever filters change so users don't get stuck on an empty page
-    useEffect(() => {
-        // eslint-disable-next-line react-hooks/set-state-in-effect
+    // --- Optimized Filter Handlers (Fixes the ESLint Error) ---
+    // Instead of using useEffect to reset the page, we do it directly when the filter changes.
+    const handleSearchChange = (val: string) => {
+        setSearchText(val);
         setCurrentPage(1);
-    }, [searchText, statusFilter, sortFilter]);
+    };
 
+    const handleStatusFilterChange = (val: string) => {
+        setStatusFilter(val);
+        setCurrentPage(1);
+    };
+
+    const handleSortFilterChange = (val: string) => {
+        setSortFilter(val);
+        setCurrentPage(1);
+    };
+
+    // --- Form Helpers ---
     const handleClearForm = () => {
         setEditingPollId(null);
         setPollTitle('');
@@ -80,52 +70,6 @@ export default function PollList() {
         setEndDate('');
         setPollStatus('open');
         setErrorMessage('');
-    };
-
-    const handleCreatePoll = async () => {
-        setErrorMessage('');
-        if (!pollTitle.trim()) return setErrorMessage('Please provide a poll title before initializing.');
-
-        try {
-            await api.post('/polls', {
-                title: pollTitle,
-                start_time: startDate || null,
-                end_time: endDate || null,
-                status: pollStatus,
-                // Sending default options to satisfy backend validation
-                options: ['Option 1', 'Option 2']
-            });
-            handleClearForm();
-            await fetchPolls();
-            showToast('Poll initialized successfully!');
-        } catch (error: unknown) {
-            let errMessage = 'Failed to create poll. Please try again.';
-            if (axios.isAxiosError(error)) errMessage = error.response?.data?.message || errMessage;
-            setErrorMessage(errMessage);
-        }
-    };
-
-    const handleUpdatePoll = async () => {
-        setErrorMessage('');
-        if (!pollTitle.trim()) return setErrorMessage('Please provide a poll title before updating.');
-
-        try {
-            await api.put(`/polls/${editingPollId}`, {
-                title: pollTitle,
-                start_time: startDate || null,
-                end_time: endDate || null,
-                status: pollStatus,
-                // Sending default options to satisfy backend validation
-                options: ['Option 1', 'Option 2']
-            });
-            handleClearForm();
-            await fetchPolls();
-            showToast('Poll updated successfully!');
-        } catch (error: unknown) {
-            let errMessage = 'Failed to update poll. Please try again.';
-            if (axios.isAxiosError(error)) errMessage = error.response?.data?.message || errMessage;
-            setErrorMessage(errMessage);
-        }
     };
 
     const handleEditClick = (poll: Poll) => {
@@ -136,76 +80,102 @@ export default function PollList() {
         setPollStatus(poll.status);
         setActiveTab('form');
         setIsPanelOpen(true);
-    };
 
-    const handleDelete = async (id: string) => {
-        const isConfirmed = await showConfirmation(
-            'Delete Poll',
-            'Are you sure you want to delete this poll? This action cannot be undone.',
-            false,
-            'warning',
-            'Yes, delete it'
-        );
-        if (!isConfirmed) return;
-
-        try {
-            await api.delete(`/polls/${id}`);
-            if (editingPollId === id) handleClearForm();
-            await fetchPolls();
-
-            // Adjust page if we delete the last item on the current page
-            if (paginatedPolls.length === 1 && currentPage > 1) {
-                setCurrentPage(prev => prev - 1);
-            }
-
-            showToast('Poll deleted successfully!');
-        } catch {
-            showToast('Failed to delete poll', 'error');
-        }
-    };
-
-    const handleBulkStatusChange = async (status: 'open' | 'closed') => {
-        try {
-            await api.post('/polls/bulk-status', { ids: selectedIds, status });
-            setSelectedIds([]);
-            await fetchPolls();
-            showToast(`${selectedIds.length} polls marked as ${status}!`);
-        } catch {
-            showToast(`Failed to update polls to ${status}`, 'error');
-        }
-    };
-
-    const handleBulkDelete = async () => {
-        const isConfirmed = await showConfirmation(
-            'Delete Multiple Polls',
-            `Are you sure you want to delete ${selectedIds.length} selected polls?`,
-            false,
-            'warning',
-            'Yes, delete them'
-        );
-        if (!isConfirmed) return;
-
-        try {
-            await api.delete('/polls/bulk-destroy', { data: { ids: selectedIds } });
-            const count = selectedIds.length;
-            if (selectedIds.includes(editingPollId || '')) handleClearForm();
-            setSelectedIds([]);
-            await fetchPolls();
-
-            // Move back to page 1 to be safe after bulk deletions
-            setCurrentPage(1);
-
-            showToast(`${count} polls deleted successfully!`);
-        } catch {
-            showToast('Failed to delete selected polls', 'error');
-        }
+        setTimeout(() => {
+            titleInputRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            titleInputRef.current?.focus();
+        }, 100);
     };
 
     const toggleSelect = (id: string) => {
         setSelectedIds(prev => prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]);
     };
 
-    // --- Filtering and Sorting Logic ---
+    const handleMutationError = (error: unknown, fallback: string) => {
+        if (axios.isAxiosError(error)) {
+            setErrorMessage(error.response?.data?.message || fallback);
+        } else {
+            setErrorMessage(fallback);
+        }
+    };
+
+    // --- Mutation Handlers ---
+    const handleCreatePoll = () => {
+        setErrorMessage('');
+        if (!pollTitle.trim()) return setErrorMessage('Please provide a poll title.');
+
+        createMutation.mutate({
+            title: pollTitle,
+            start_time: startDate || null,
+            end_time: endDate || null,
+            status: pollStatus,
+        }, {
+            onSuccess: handleClearForm,
+            onError: (err) => handleMutationError(err, 'Failed to create poll.')
+        });
+    };
+
+    const handleUpdatePoll = () => {
+        if (!editingPollId) return;
+        setErrorMessage('');
+
+        updateMutation.mutate({
+            id: editingPollId,
+            payload: {
+                title: pollTitle,
+                start_time: startDate || null,
+                end_time: endDate || null,
+                status: pollStatus,
+            }
+        }, {
+            onSuccess: handleClearForm,
+            onError: (err) => handleMutationError(err, 'Failed to update poll.')
+        });
+    };
+
+    const handleDelete = async (id: string) => {
+        const isConfirmed = await showConfirmation(
+            'Delete Poll',
+            'Are you sure? This action cannot be undone.',
+            false, 'warning', 'Yes, delete it'
+        );
+        if (!isConfirmed) return;
+
+        deleteMutation.mutate(id, {
+            onSuccess: () => {
+                if (editingPollId === id) handleClearForm();
+                // Check if we need to jump back a page
+                if (paginatedPolls.length === 1 && currentPage > 1) {
+                    setCurrentPage(prev => prev - 1);
+                }
+            }
+        });
+    };
+
+    const handleBulkStatusChange = (status: 'open' | 'closed') => {
+        bulkStatusMutation.mutate({ ids: selectedIds, status }, {
+            onSuccess: () => setSelectedIds([])
+        });
+    };
+
+    const handleBulkDelete = async () => {
+        const isConfirmed = await showConfirmation(
+            'Delete Multiple',
+            `Delete ${selectedIds.length} polls?`,
+            false, 'warning', 'Yes, delete them'
+        );
+        if (!isConfirmed) return;
+
+        bulkDeleteMutation.mutate(selectedIds, {
+            onSuccess: () => {
+                if (selectedIds.includes(editingPollId || '')) handleClearForm();
+                setSelectedIds([]);
+                setCurrentPage(1);
+            }
+        });
+    };
+
+    // --- Filtering and Sorting ---
     const filteredPolls = useMemo(() => {
         return polls
             .filter((poll) => {
@@ -221,7 +191,6 @@ export default function PollList() {
             });
     }, [polls, searchText, statusFilter, sortFilter]);
 
-    // Calculate pagination slices
     const totalPages = Math.ceil(filteredPolls.length / itemsPerPage);
     const paginatedPolls = filteredPolls.slice(
         (currentPage - 1) * itemsPerPage,
@@ -236,7 +205,6 @@ export default function PollList() {
                 activeTab={activeTab}
                 setActiveTab={setActiveTab}
 
-                // Form props
                 editingPollId={editingPollId}
                 pollTitle={pollTitle}
                 setPollTitle={setPollTitle}
@@ -251,16 +219,17 @@ export default function PollList() {
                 handleClearForm={handleClearForm}
                 handleCreatePoll={handleCreatePoll}
                 handleUpdatePoll={handleUpdatePoll}
+                titleInputRef={titleInputRef}
+                isSubmitting={createMutation.isPending || updateMutation.isPending}
 
-                // Filter props
+                // Pass the new handlers instead of direct setters
                 searchText={searchText}
-                setSearchText={setSearchText}
+                setSearchText={handleSearchChange}
                 statusFilter={statusFilter}
-                setStatusFilter={setStatusFilter}
+                setStatusFilter={handleStatusFilterChange}
                 sortFilter={sortFilter}
-                setSortFilter={setSortFilter}
+                setSortFilter={handleSortFilterChange}
 
-                // Action props
                 selectedIds={selectedIds}
                 handleBulkStatusChange={handleBulkStatusChange}
                 handleBulkDelete={handleBulkDelete}

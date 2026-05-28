@@ -1,6 +1,9 @@
+// File: src/features/poll/PollTabs.tsx
+
+import { type RefObject } from 'react';
 import {
     Plus, ChevronDown, ChevronUp, Filter, Lock, Unlock,
-    Trash, CheckSquare, AlertCircle, Edit2
+    Trash, CheckSquare, AlertCircle, Edit2, Loader2
 } from 'lucide-react';
 import { Text } from '../../components/input/Text';
 import { Select } from '../../components/input/Select';
@@ -29,7 +32,12 @@ interface PollTabsProps {
     handleCreatePoll: () => void;
     handleUpdatePoll: () => void;
 
-    // Filter States
+    // Fix: Properly typed Ref
+    titleInputRef: RefObject<HTMLInputElement | null>;
+
+    // New: Mutation loading state
+    isSubmitting: boolean;
+
     searchText: string;
     setSearchText: (v: string) => void;
     statusFilter: string;
@@ -45,7 +53,9 @@ interface PollTabsProps {
 
 export default function PollTabs({
                                      isPanelOpen, setIsPanelOpen, activeTab, setActiveTab,
-                                     editingPollId, pollTitle, setPollTitle, startDate, setStartDate, endDate, setEndDate, pollStatus, setPollStatus, errorMessage, setErrorMessage, handleClearForm, handleCreatePoll, handleUpdatePoll,
+                                     editingPollId, pollTitle, setPollTitle, startDate, setStartDate, endDate, setEndDate,
+                                     pollStatus, setPollStatus, errorMessage, setErrorMessage, handleClearForm,
+                                     handleCreatePoll, handleUpdatePoll, titleInputRef, isSubmitting,
                                      searchText, setSearchText, statusFilter, setStatusFilter, sortFilter, setSortFilter,
                                      selectedIds, handleBulkStatusChange, handleBulkDelete
                                  }: PollTabsProps) {
@@ -58,6 +68,7 @@ export default function PollTabs({
 
     return (
         <section className="bg-[var(--bg-surface)] rounded-3xl border border-[var(--border-color)] shadow-sm overflow-hidden transition-all duration-300">
+            {/* Tab Headers */}
             <div className="flex items-center justify-between px-6 py-2 border-b border-[var(--border-color)] bg-[var(--bg-main)]/30">
                 <div className="flex gap-1">
                     {tabs.map((tab) => (
@@ -87,6 +98,7 @@ export default function PollTabs({
                 </button>
             </div>
 
+            {/* Panel Content */}
             <div className={`transition-all duration-300 ${isPanelOpen ? 'max-h-[800px] opacity-100' : 'max-h-0 opacity-0'} overflow-hidden`}>
                 <div className="p-8">
 
@@ -103,9 +115,10 @@ export default function PollTabs({
                             <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
                                 <div className="md:col-span-4">
                                     <Text
+                                        ref={titleInputRef}
                                         name="pollTitle"
-                                        label="New Poll Title"
-                                        placeholder="e.g., Budget Approval 2024"
+                                        label="Poll Title"
+                                        placeholder="e.g., Budget Approval 2026"
                                         value={pollTitle}
                                         onChange={(e) => {
                                             setPollTitle(e.target.value);
@@ -139,7 +152,7 @@ export default function PollTabs({
                                         name="pollStatus"
                                         label={editingPollId ? "Status" : "Initial Status"}
                                         value={pollStatus}
-                                        onChange={(e) => setPollStatus(e.target.value)}
+                                        onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setPollStatus(e.target.value)}
                                         options={[
                                             { value: 'open', label: 'Open' },
                                             { value: 'closed', label: 'Closed' }
@@ -151,16 +164,25 @@ export default function PollTabs({
                                     {editingPollId && (
                                         <button
                                             onClick={handleClearForm}
-                                            className="w-1/3 bg-slate-500/10 text-slate-600 font-black py-4 rounded-2xl hover:bg-slate-500/20 active:scale-95 transition-all"
+                                            disabled={isSubmitting}
+                                            className="w-1/3 bg-slate-500/10 text-slate-600 font-black py-4 rounded-2xl hover:bg-slate-500/20 active:scale-95 transition-all disabled:opacity-50"
                                         >
                                             CLEAR
                                         </button>
                                     )}
                                     <button
                                         onClick={editingPollId ? handleUpdatePoll : handleCreatePoll}
-                                        className={`${editingPollId ? 'w-2/3' : 'w-full'} bg-brand-600 text-white font-black py-4 rounded-2xl shadow-lg shadow-brand-500/20 active:scale-95 transition-all`}
+                                        disabled={isSubmitting}
+                                        className={`${editingPollId ? 'w-2/3' : 'w-full'} flex items-center justify-center gap-2 bg-brand-600 text-white font-black py-4 rounded-2xl shadow-lg shadow-brand-500/20 active:scale-95 transition-all disabled:opacity-70 disabled:cursor-not-allowed`}
                                     >
-                                        {editingPollId ? 'EDIT' : 'INITIALIZE'}
+                                        {isSubmitting ? (
+                                            <>
+                                                <Loader2 size={18} className="animate-spin" />
+                                                <span>PROCESSING...</span>
+                                            </>
+                                        ) : (
+                                            editingPollId ? 'EDIT' : 'INITIALIZE'
+                                        )}
                                     </button>
                                 </div>
                             </div>
@@ -183,7 +205,7 @@ export default function PollTabs({
                                     name="status"
                                     label="Status"
                                     value={statusFilter}
-                                    onChange={(e) => setStatusFilter(e.target.value)}
+                                    onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setStatusFilter(e.target.value)}
                                     options={[
                                         { value: 'all', label: 'All Statuses' },
                                         { value: 'open', label: 'Open' },
@@ -197,7 +219,7 @@ export default function PollTabs({
                                     name="sort"
                                     label="Sort By"
                                     value={sortFilter}
-                                    onChange={(e) => setSortFilter(e.target.value)}
+                                    onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setSortFilter(e.target.value)}
                                     options={[
                                         { value: 'newest', label: 'Newest First' },
                                         { value: 'oldest', label: 'Oldest First' }
@@ -220,21 +242,21 @@ export default function PollTabs({
                             <div className="flex gap-2">
                                 <button
                                     onClick={() => handleBulkStatusChange('open')}
-                                    disabled={!selectedIds.length}
+                                    disabled={!selectedIds.length || isSubmitting}
                                     className="flex items-center gap-2 px-6 py-4 bg-emerald-500/10 text-emerald-600 rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-emerald-600 hover:text-white disabled:opacity-30 transition-all border border-emerald-500/20"
                                 >
                                     <Unlock size={14} /> Open
                                 </button>
                                 <button
                                     onClick={() => handleBulkStatusChange('closed')}
-                                    disabled={!selectedIds.length}
+                                    disabled={!selectedIds.length || isSubmitting}
                                     className="flex items-center gap-2 px-6 py-4 bg-amber-500/10 text-amber-600 rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-amber-600 hover:text-white disabled:opacity-30 transition-all border border-amber-500/20"
                                 >
                                     <Lock size={14} /> Closed
                                 </button>
                                 <button
                                     onClick={handleBulkDelete}
-                                    disabled={!selectedIds.length}
+                                    disabled={!selectedIds.length || isSubmitting}
                                     className="flex items-center gap-2 px-6 py-4 bg-rose-500/10 text-rose-600 rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-rose-600 hover:text-white disabled:opacity-30 transition-all border border-rose-500/20"
                                 >
                                     <Trash size={14} /> Delete
