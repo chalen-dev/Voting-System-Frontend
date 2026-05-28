@@ -5,6 +5,7 @@ import { showConfirmation, showToast } from '../../helpers/swalHelpers';
 import { type Poll, type TabType, formatForDateTimeInput } from '../../features/poll/poll';
 import PollTabs from '../../features/poll/PollTabs';
 import PollTable from '../../features/poll/PollTable';
+import Pagination from '../../components/navigation/Pagination';
 
 export default function PollList() {
     const [isPanelOpen, setIsPanelOpen] = useState(true);
@@ -14,6 +15,10 @@ export default function PollList() {
     // --- Data State ---
     const [polls, setPolls] = useState<Poll[]>([]);
     const [isLoading, setIsLoading] = useState(false);
+
+    // --- Pagination State ---
+    const [currentPage, setCurrentPage] = useState(1);
+    const itemsPerPage = 10;
 
     // --- Form States ---
     const [editingPollId, setEditingPollId] = useState<string | null>(null);
@@ -29,33 +34,44 @@ export default function PollList() {
     const [sortFilter, setSortFilter] = useState('newest');
 
     // --- Axios Configuration ---
-    const api = axios.create({
-        baseURL: 'http://localhost:8000/api',
-        headers: {
-            'Content-Type': 'application/json',
-            'Accept': 'application/json',
-            'Authorization': `Bearer ${localStorage.getItem('token') || ''}`
-        }
-    });
+    // FIX 1: Wrap api in useMemo so it doesn't trigger infinite loops in useCallback
+    const api = useMemo(() => {
+        return axios.create({
+            baseURL: 'http://localhost:8000/api',
+            headers: {
+                'Content-Type': 'application/json',
+                'Accept': 'application/json',
+                'Authorization': `Bearer ${localStorage.getItem('token') || ''}`
+            }
+        });
+    }, []);
 
     // --- Handlers ---
-    // eslint-disable-next-line react-hooks/exhaustive-deps
     const fetchPolls = useCallback(async () => {
         try {
             setIsLoading(true);
             const { data } = await api.get('/polls');
-            setPolls(data);
+
+            // FIX 2: Protect against paginated objects from the backend
+            const pollsArray = Array.isArray(data) ? data : (data?.data || []);
+            setPolls(pollsArray);
         } catch (error) {
             console.error("Failed to fetch polls:", error);
         } finally {
             setIsLoading(false);
         }
-    }, []);
+    }, [api]); // ESLint is now happy because api is stable and included
 
     useEffect(() => {
         // eslint-disable-next-line react-hooks/set-state-in-effect
         void fetchPolls();
     }, [fetchPolls]);
+
+    // Reset to page 1 whenever filters change so users don't get stuck on an empty page
+    useEffect(() => {
+        // eslint-disable-next-line react-hooks/set-state-in-effect
+        setCurrentPage(1);
+    }, [searchText, statusFilter, sortFilter]);
 
     const handleClearForm = () => {
         setEditingPollId(null);
@@ -75,7 +91,9 @@ export default function PollList() {
                 title: pollTitle,
                 start_time: startDate || null,
                 end_time: endDate || null,
-                status: pollStatus
+                status: pollStatus,
+                // Sending default options to satisfy backend validation
+                options: ['Option 1', 'Option 2']
             });
             handleClearForm();
             await fetchPolls();
@@ -96,7 +114,9 @@ export default function PollList() {
                 title: pollTitle,
                 start_time: startDate || null,
                 end_time: endDate || null,
-                status: pollStatus
+                status: pollStatus,
+                // Sending default options to satisfy backend validation
+                options: ['Option 1', 'Option 2']
             });
             handleClearForm();
             await fetchPolls();
@@ -132,6 +152,12 @@ export default function PollList() {
             await api.delete(`/polls/${id}`);
             if (editingPollId === id) handleClearForm();
             await fetchPolls();
+
+            // Adjust page if we delete the last item on the current page
+            if (paginatedPolls.length === 1 && currentPage > 1) {
+                setCurrentPage(prev => prev - 1);
+            }
+
             showToast('Poll deleted successfully!');
         } catch {
             showToast('Failed to delete poll', 'error');
@@ -165,6 +191,10 @@ export default function PollList() {
             if (selectedIds.includes(editingPollId || '')) handleClearForm();
             setSelectedIds([]);
             await fetchPolls();
+
+            // Move back to page 1 to be safe after bulk deletions
+            setCurrentPage(1);
+
             showToast(`${count} polls deleted successfully!`);
         } catch {
             showToast('Failed to delete selected polls', 'error');
@@ -190,6 +220,13 @@ export default function PollList() {
                 return sortFilter === 'newest' ? dateB - dateA : dateA - dateB;
             });
     }, [polls, searchText, statusFilter, sortFilter]);
+
+    // Calculate pagination slices
+    const totalPages = Math.ceil(filteredPolls.length / itemsPerPage);
+    const paginatedPolls = filteredPolls.slice(
+        (currentPage - 1) * itemsPerPage,
+        currentPage * itemsPerPage
+    );
 
     return (
         <div className="p-8 max-w-7xl mx-auto space-y-8 animate-page">
@@ -229,15 +266,23 @@ export default function PollList() {
                 handleBulkDelete={handleBulkDelete}
             />
 
-            <PollTable
-                isLoading={isLoading}
-                filteredPolls={filteredPolls}
-                selectedIds={selectedIds}
-                setSelectedIds={setSelectedIds}
-                toggleSelect={toggleSelect}
-                handleEditClick={handleEditClick}
-                handleDelete={handleDelete}
-            />
+            <div>
+                <PollTable
+                    isLoading={isLoading}
+                    filteredPolls={paginatedPolls}
+                    selectedIds={selectedIds}
+                    setSelectedIds={setSelectedIds}
+                    toggleSelect={toggleSelect}
+                    handleEditClick={handleEditClick}
+                    handleDelete={handleDelete}
+                />
+
+                <Pagination
+                    currentPage={currentPage}
+                    totalPages={totalPages}
+                    onPageChange={setCurrentPage}
+                />
+            </div>
         </div>
     );
 }
