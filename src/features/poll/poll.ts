@@ -1,0 +1,25 @@
+import { type LucideIcon } from 'lucide-react';
+
+export type TabType = 'form' | 'filter' | 'action';
+
+export interface TabConfig {
+    id: TabType;
+    label: string;
+    icon: LucideIcon;
+}
+
+export interface Poll {
+    id: string;
+    title: string;
+    status: 'open' | 'closed';
+    start_time: string | null;
+    end_time: string | null;
+}
+
+export const formatForDateTimeInput = (dateString: string | null): string => {
+    if (!dateString) return '';
+    const date = new Date(dateString);
+    if (isNaN(date.getTime())) return '';
+    const tzoffset = (new Date()).getTimezoneOffset() * 60000;
+    return (new Date(date.getTime() - tzoffset)).toISOString().slice(0, 16);
+};

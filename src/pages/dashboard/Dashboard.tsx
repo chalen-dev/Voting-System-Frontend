@@ -19,7 +19,7 @@ export default function Dashboard() {
                         Dashboard
                     </h1>
                     <p className="text-[var(--text-main)] mt-1 font-medium text-lg">
-                        Welcome back, <span className="text-brand-600 dark:text-brand-500 font-bold">{user?.first_name}</span>! ✨
+                        Welcome back, <span className="text-brand-600 dark:text-brand-500 font-bold">{user?.first_name}</span>!
                     </p>
                 </div>
 

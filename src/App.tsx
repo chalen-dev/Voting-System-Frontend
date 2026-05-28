@@ -10,7 +10,7 @@ import GuestRoute from './components/routes/GuestRoute';
 import Login from './pages/auth/Login';
 import Register from './pages/auth/Register';
 import Dashboard from './pages/dashboard/Dashboard';
-import PollList from './pages/polls/PollList';
+import PollList from './pages/polls/PollList.tsx';
 import PollCreation from './pages/polls/PollCreation';
 import Ballot from './pages/ballot/Ballot';
 
