@@ -6,54 +6,44 @@ import MainLayout from './components/layout/MainLayout';
 import ProtectedRoute from './components/routes/ProtectedRoute';
 import GuestRoute from './components/routes/GuestRoute';
 
+// Components
+import LoadingScreen from './components/ui/LoadingScreen'; // 1. Import new component
+
 // Pages
 import Login from './pages/auth/Login';
 import Register from './pages/auth/Register';
 import Dashboard from './pages/dashboard/Dashboard';
 import PollList from './pages/polls/PollList.tsx';
-import PollCreation from './pages/polls/PollCreation';
+import PollOptionsManager from './pages/polls/PollOptionsManager.tsx';
 import Ballot from './pages/ballot/Ballot';
 
 export default function App() {
     const { isAuthenticated, loading } = useAuth();
 
-    if (loading) {
-        return (
-            <div className="flex h-screen items-center justify-center bg-white dark:bg-gray-900 dark:text-white">
-                <div className="animate-pulse font-medium">Loading Application...</div>
-            </div>
-        );
-    }
+    // 2. Simple, clean conditional return
+    if (loading) return <LoadingScreen />;
 
     return (
         <div className="min-h-screen flex flex-col">
-            {/* Header is here -> Visible on ALL routes */}
             <Header />
 
             <Routes>
-                {/* Root Redirect */}
-                <Route
-                    path="/"
-                    element={<Navigate to={isAuthenticated ? "/dashboard" : "/login"} replace />}
-                />
+                <Route path="/" element={<Navigate to={isAuthenticated ? "/dashboard" : "/login"} replace />} />
 
-                {/* Guest Routes: No Sidebar, just the Header */}
                 <Route element={<GuestRoute />}>
                     <Route path="/login" element={<Login />} />
                     <Route path="/register" element={<Register />} />
                 </Route>
 
-                {/* Protected Routes: Header + Sidebar */}
                 <Route element={<ProtectedRoute />}>
                     <Route element={<MainLayout />}>
                         <Route path="/dashboard" element={<Dashboard />} />
                         <Route path="/polls" element={<PollList />} />
-                        <Route path="/polls/create" element={<PollCreation />} />
+                        <Route path="/polls/:pollId/manage" element={<PollOptionsManager />} />
                         <Route path="/ballot/:id" element={<Ballot />} />
                     </Route>
                 </Route>
 
-                {/* Catch-all */}
                 <Route path="*" element={<Navigate to="/" replace />} />
             </Routes>
         </div>

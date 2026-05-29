@@ -1,4 +1,7 @@
+// File: src/features/poll/PollTable.tsx
+
 import { Edit2, ExternalLink, Trash2 } from 'lucide-react';
+import { useNavigate } from 'react-router-dom'; // Added for navigation
 import { type Poll } from './poll';
 
 interface PollTableProps {
@@ -12,13 +15,23 @@ interface PollTableProps {
 }
 
 export default function PollTable({
-                                      isLoading, filteredPolls, selectedIds, setSelectedIds, toggleSelect, handleEditClick, handleDelete
+                                      isLoading,
+                                      filteredPolls,
+                                      selectedIds,
+                                      setSelectedIds,
+                                      toggleSelect,
+                                      handleEditClick,
+                                      handleDelete
                                   }: PollTableProps) {
+    const navigate = useNavigate();
+
     return (
         <section className="space-y-4">
             <div className="bg-[var(--bg-surface)] border border-[var(--border-color)] rounded-3xl overflow-hidden shadow-sm">
                 {isLoading ? (
-                    <div className="p-8 text-center text-sm font-bold opacity-50 uppercase tracking-widest">Loading Polls...</div>
+                    <div className="p-8 text-center text-sm font-bold opacity-50 uppercase tracking-widest">
+                        Loading Polls...
+                    </div>
                 ) : (
                     <table className="w-full text-left border-collapse">
                         <thead>
@@ -42,7 +55,10 @@ export default function PollTable({
                                 <td colSpan={4} className="px-6 py-10 text-center opacity-50 text-sm">No polls found. Create one above!</td>
                             </tr>
                         ) : filteredPolls.map((poll) => (
-                            <tr key={poll.id} className={`hover:bg-brand-500/5 transition-colors group ${selectedIds.includes(poll.id) ? 'bg-brand-500/[0.03]' : ''}`}>
+                            <tr
+                                key={poll.id}
+                                className={`hover:bg-brand-500/5 transition-colors group ${selectedIds.includes(poll.id) ? 'bg-brand-500/[0.03]' : ''}`}
+                            >
                                 <td className="px-6 py-6">
                                     <input
                                         type="checkbox"
@@ -51,12 +67,18 @@ export default function PollTable({
                                         className="w-5 h-5 rounded border-[var(--border-color)] text-brand-600 cursor-pointer"
                                     />
                                 </td>
-                                <td className="px-6 py-6 font-bold text-[var(--text-heading)] group-hover:text-brand-600 transition-colors">
+
+                                {/* Clicking the Title now navigates to the Option Manager */}
+                                <td
+                                    className="px-6 py-6 font-bold text-[var(--text-heading)] group-hover:text-brand-600 cursor-pointer transition-colors"
+                                    onClick={() => navigate(`/polls/${poll.id}/manage`)}
+                                >
                                     {poll.title}
                                     <div className="text-[10px] opacity-40 font-medium uppercase tracking-tighter mt-1">
                                         {poll.start_time ? new Date(poll.start_time).toLocaleDateString() : 'N/A'} to {poll.end_time ? new Date(poll.end_time).toLocaleDateString() : 'N/A'}
                                     </div>
                                 </td>
+
                                 <td className="px-6 py-6">
                                         <span className={`px-3 py-1 rounded-xl text-[10px] font-black uppercase border ${
                                             poll.status === 'open'
@@ -66,11 +88,35 @@ export default function PollTable({
                                             {poll.status}
                                         </span>
                                 </td>
+
                                 <td className="px-6 py-6 text-right">
                                     <div className="flex justify-end gap-1">
-                                        <button onClick={() => handleEditClick(poll)} className="p-2.5 hover:bg-amber-500 hover:text-white rounded-xl text-amber-600 transition-all active:scale-90" title="Edit"><Edit2 size={18} /></button>
-                                        <button className="p-2.5 hover:bg-brand-600 hover:text-white rounded-xl text-brand-600 transition-all active:scale-90" title="View"><ExternalLink size={18} /></button>
-                                        <button onClick={() => handleDelete(poll.id)} className="p-2.5 hover:bg-rose-500 hover:text-white rounded-xl text-rose-600 transition-all active:scale-90" title="Delete"><Trash2 size={18} /></button>
+                                        {/* Edit Button: Opens the Edit Modal/Form */}
+                                        <button
+                                            onClick={() => handleEditClick(poll)}
+                                            className="p-2.5 hover:bg-amber-500 hover:text-white rounded-xl text-amber-600 transition-all active:scale-90"
+                                            title="Edit Poll Details"
+                                        >
+                                            <Edit2 size={18} />
+                                        </button>
+
+                                        {/* Manage Options Button: Navigates to Options Manager */}
+                                        <button
+                                            onClick={() => navigate(`/polls/${poll.id}/manage`)}
+                                            className="p-2.5 hover:bg-brand-600 hover:text-white rounded-xl text-brand-600 transition-all active:scale-90"
+                                            title="Manage Poll Options"
+                                        >
+                                            <ExternalLink size={18} />
+                                        </button>
+
+                                        {/* Delete Button */}
+                                        <button
+                                            onClick={() => handleDelete(poll.id)}
+                                            className="p-2.5 hover:bg-rose-500 hover:text-white rounded-xl text-rose-600 transition-all active:scale-90"
+                                            title="Delete Poll"
+                                        >
+                                            <Trash2 size={18} />
+                                        </button>
                                     </div>
                                 </td>
                             </tr>
